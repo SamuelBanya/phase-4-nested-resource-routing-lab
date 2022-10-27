@@ -1,0 +1,138 @@
+* Notes
+I ran the following commands to install the lab's components:
+#+begin_src ruby
+bundle install
+rails db:migrate db:seed
+#+end_src
+
+Nested Items Index Route:
+- This is the provided 'GET /users/:user_id/items' API route:
+#+begin_src json
+GET /users/:user_id/items
+
+Response Body
+-------
+[
+  {
+    "id": 1,
+    "name": "Non-stick pan",
+    "description": "Sticks a bit",
+    "price": 10,
+    "user_id": 1
+  },
+  {
+    "id": 1,
+    "name": "Ceramic plant pots",
+    "description": "Plants not included",
+    "price": 31,
+    "user_id": 1
+  }
+]
+#+end_src
+
+Nested Item Show Route:
+- This is the provided route for the 'GET /users/:user_id/items/:id' API route:
+#+begin_src json
+GET /users/:user_id/items/:id
+
+Response Body
+-------
+{
+  "id": 1,
+  "name": "Non-stick pan",
+  "description": "Sticks a bit",
+  "price": 10,
+  "user_id": 1
+}
+#+end_src
+
+Nested Item Create Route:
+This is the provided 'POST /users/:user_id/items' API route:
+#+begin_src json
+POST /users/:user_id/items
+
+Headers:
+-------
+Content-Type: application/json
+
+Request Body:
+-------
+{
+  "name": "Garden gnomes",
+  "description": "No refunds",
+  "price": 23
+}
+
+Response Body:
+-------
+{
+  "id": 2,
+  "name": "Garden gnomes",
+  "description": "No refunds",
+  "price": 23,
+  "user_id": 1
+}
+#+end_src
+
+I then modified the 'config/routes.rb' file with the following revisions:
+#+begin_src ruby
+Rails.application.routes.draw do
+  resources :items, only: [:index]
+
+  # This allows someone to access the 'users' resource
+  # and as a result, they can also access '/items'
+  # aftewrards, but only to use the ':index',
+  # ':show', and ':create' actions so that they
+  # can create individual 'items' for 'users':
+  resources :users, only: [:show] do
+    resources :items, only: [:index, :show, :create]
+  end
+end
+#+end_src
+
+I then adjusted the 'app/controllers/items_controller.rb' Controller file with the following revisions:
+#+begin_src ruby
+class ItemsController < ApplicationController
+  rescue_from ActiveRecord::RecordNotFound, with: :render_not_found_response
+
+  def index
+    if params[:user_id]
+      user = find_user
+      items = user.items()
+    else
+      items = Item.all()
+    end
+    render json: items, include: :user
+  end
+
+  def show
+    item = find_item
+    render json: item
+  end
+
+  def create
+    user = find_user
+    item = user.items.create(item_params)
+    render json: item, status: :created
+  end
+
+  # Including private methods mentioned above:
+  private
+
+  def find_item
+    Item.find(params[:id])
+  end
+
+  def find_user
+    User.find(params[:user_id])
+  end
+
+  def item_params
+    params.permit(:name, :description, :price)
+  end
+
+  def render_not_found_response(exception)
+    render json: { error: "#{exception.model} not found" }, status: :not_found
+  end
+end
+#+end_src
